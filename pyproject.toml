@@ -1,0 +1,29 @@
+[project]
+name = "seamly2d-mcp"
+version = "0.1.0"
+description = "Seamly2D pattern-drafting integration through the Model Context Protocol"
+readme = "README.md"
+authors = [
+    { name = "SKamalavignesh" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.12"
+dependencies = [
+    "mcp[cli]>=1.12.2,<3",
+    "lxml>=5.0",
+]
+
+[project.scripts]
+seamly2d-mcp = "seamly2d_mcp.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
