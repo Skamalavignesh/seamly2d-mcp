@@ -68,6 +68,68 @@ Changes only take effect in the Seamly2D GUI after the file is reopened there.
 ### `set_pattern_notes`
 Replace a pattern's `<notes>` text. Backs up to `<path>.bak` first.
 
+## Drafting geometry from scratch
+
+A newer, separate capability from the metadata/increment tools above: these
+create and extend actual draft geometry (points and lines) in a `.sm2d`
+file, so a pattern can be drafted from nothing rather than only having its
+existing increments tweaked. Covers the handful of point types most drafts
+are built from -- not the full ~40 types Seamly2D's toolbox has (see
+`src/libs/vtools/tools/` in the Seamly2D source for the rest). Every write
+backs up to `<path>.bak` first, same as the tools above.
+
+Typical flow: `create_pattern` → `add_point_single` (at least once, as a
+starting anchor) → a chain of `add_point_end_line`/`add_point_along_line`/
+`add_line` → `validate_pattern` to catch a bad reference or formula early
+(this loads the file in Seamly2D's own silent test mode, so it's checked
+against the real app, not just against this server's idea of the schema).
+Point/piece *outlines* (the later "Piece mode" step in Seamly2D's own
+workflow) aren't covered yet -- `render_pattern` won't export anything
+useful until pieces exist.
+
+### `create_pattern`
+```json
+{"path": "C:/patterns/new_shirt.sm2d", "draft_block_name": "Front"}
+```
+Writes a new file with one empty draft block. Does **not** back up an
+existing file first -- meant for a path that doesn't exist yet.
+
+### `list_points`
+Points in one draft block, in creation order, with their raw attributes --
+use this to find a point's name/id to reference in the tools below.
+
+### `add_point_single`
+```json
+{"path": "C:/patterns/new_shirt.sm2d", "draft_block_name": "Front", "name": "A1", "x": 0, "y": 0}
+```
+An anchor point at explicit coordinates. The only point type with no
+dependencies -- every draft needs at least one.
+
+### `add_point_end_line`
+```json
+{"path": "C:/patterns/new_shirt.sm2d", "draft_block_name": "Front",
+ "name": "A2", "base_point": "A1", "length": "20", "angle": "0"}
+```
+A point at a given length and angle from an existing point (by name or id)
+-- most manual construction steps ("go up 3cm, then right 2cm") are a chain
+of these. `length`/`angle` accept plain numbers or Seamly2D formulas
+(increment names, expressions).
+
+### `add_point_along_line`
+```json
+{"path": "C:/patterns/new_shirt.sm2d", "draft_block_name": "Front",
+ "name": "A4", "first_point": "A1", "second_point": "A3", "length": "10"}
+```
+A point at a given length along the line from `first_point` toward
+`second_point`.
+
+### `add_line`
+```json
+{"path": "C:/patterns/new_shirt.sm2d", "draft_block_name": "Front",
+ "first_point": "A1", "second_point": "A2"}
+```
+A plain visual line connecting two existing points.
+
 ## Live (Ribben addon)
 
 These require a running Seamly2D built from the `E:\seamly2d-ribben` fork

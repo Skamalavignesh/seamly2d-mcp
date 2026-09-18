@@ -65,6 +65,7 @@ examples. Summary:
 | `list_increments` | List a pattern's named parametric formulas. |
 | `update_increment` | Edit one increment's formula in place. |
 | `set_pattern_notes` | Set a pattern's notes text. |
+| `create_pattern` / `add_point_single` / `add_point_end_line` / `add_point_along_line` / `add_line` / `list_points` | Draft new geometry from scratch into a `.sm2d` file — see [Drafting geometry](#drafting-geometry-from-scratch) below. |
 | `render_pattern` | Headlessly export a pattern's layout (SVG/PDF/PNG/DXF/...). |
 | `validate_pattern` | Silently load a pattern to check it rebuilds cleanly. |
 | `validate_measurements` | Silently load a measurement file (via SeamlyMe) to check it parses cleanly. |
@@ -73,6 +74,20 @@ examples. Summary:
 
 All file-mutating tools (`update_measurements`, `update_increment`,
 `set_pattern_notes`) back up the original file to `<path>.bak` before writing.
+
+## Drafting geometry from scratch
+
+`create_pattern` + `add_point_single`/`add_point_end_line`/`add_point_along_line`/
+`add_line` write real draft geometry (points/lines) into a `.sm2d` file, so
+a pattern can be built from nothing instead of only having an existing
+one's increments tweaked. Grounded directly in Seamly2D's own schema
+(`src/libs/ifc/schema/pattern/*.xsd` in the Seamly2D source) and verified
+against the real, officially-installed `seamly2d.exe` -- a pattern drafted
+purely through these tools loads and validates cleanly, and its geometry
+renders correctly when opened. Covers the handful of point types most
+drafts are built from, not the full ~40 Seamly2D's toolbox has; see
+[docs/tools.md](docs/tools.md#drafting-geometry-from-scratch) for the
+details and TODO.md for what's still ahead (curves, arcs, piece outlines).
 
 ## Live connection (Ribben addon)
 
@@ -95,9 +110,11 @@ A Streamable HTTP transport (`--transport http`) is available for ChatGPT/remote
 clients — see [docs/installation.md](docs/installation.md#remote--chatgpt-streamable-http-transport).
 A live connection into a running Seamly2D (via the Ribben addon, see above) is
 also available for pattern metadata/increments/notes.
-Not yet done: point/piece-level geometry editing (deliberately deferred, see
-PROJECT_PLAN.md), and live render/measurement tools (the addon doesn't expose
-those yet).
+Drafting new geometry from scratch (points/lines) is now available -- see
+above -- covering a subset of Seamly2D's point types. Not yet done: curves/
+arcs, piece outlines (so render_pattern has something to export), a live
+(addon-backed) version of geometry creation, and live render/measurement
+tools (the addon doesn't expose those yet).
 
 ## Development
 

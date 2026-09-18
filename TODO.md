@@ -74,6 +74,43 @@ milestone wires this server up to that addon instead of/alongside file edits.
 - [ ] `live_render`/live measurement tools (the addon only exposes pattern
   metadata + increments + notes so far — see the addon's own RIBBEN.md TODO)
 
+## Milestone 7 — Draft new geometry from scratch (file-based)
+The one deferred item from Milestone 2 ("point/piece-level geometry editing")
+starts here: writing real `<point>`/`<line>` elements into a `.sm2d`'s
+`<draftBlock><calculation>`, grounded in the schema Seamly2D itself ships
+(`src/libs/ifc/schema/pattern/*.xsd`) and in real sample files rather than
+guessed. Deliberately covers a handful of the ~40 point types Seamly2D
+supports (see `src/libs/vtools/tools/` in the Seamly2D source for the rest)
+instead of all of them at once.
+- [x] `operations/xml_geometry.py`: `create_pattern`, `list_points`,
+  `add_point_single` (anchor point, no dependencies), `add_point_end_line`
+  (length+angle from an existing point), `add_point_along_line` (length
+  along an existing line), `add_line` (visual connector)
+- [x] Global id allocation (`max(any id in the doc) + 1`) — confirmed
+  empirically that points/lines/arcs/splines share one id counter, not
+  separate ones per element type
+- [x] Name validation (schema's `shortName` rules) and duplicate-name
+  rejection; referenced points/draft blocks must already exist
+- [x] `create_pattern`/`add_point_single`/`add_point_end_line`/
+  `add_point_along_line`/`add_line`/`list_points` tools in `server.py`
+- [x] 17 tests (id allocation, name-by-id vs name-by-name references,
+  invalid names, duplicate names, unknown references, backup-before-write)
+- [x] Real end-to-end verification, twice over: (1) a pattern drafted
+  purely through the MCP tool functions was checked with `validate_pattern`
+  against the actual **officially-installed** `seamly2d.exe` (not the
+  Ribben dev build) and loaded cleanly; (2) opened it directly in that same
+  real Seamly2D and confirmed visually — the derived point (`alongLine`)
+  landed exactly on the expected line, confirming the geometry math and XML
+  structure are correct, not just "doesn't crash on load"
+- [ ] Curves/arcs (`<spline>`/`<arc>` elements — more attribute variants,
+  not yet grounded the way the point/line types above are)
+- [ ] Piece outlines (`<pieces>` — needed before `render_pattern` can export
+  anything from a from-scratch draft; a separate tool surface mirroring
+  Seamly2D's own Draft → Piece mode split)
+- [ ] A live (Ribben-addon-backed) version of geometry creation, so new
+  points appear in a running Seamly2D immediately the way live_update_increment
+  does — much larger scope, see the addon's own RIBBEN.md TODO
+
 ---
 **Check-in convention:** after finishing an item, mark it `[x]` here and say so
 in chat before moving to the next one — no silent batch-completing a whole

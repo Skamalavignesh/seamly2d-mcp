@@ -13,7 +13,7 @@ except ImportError:
     from mcp.server.mcpserver import MCPServer as FastMCP
 from mcp.types import ImageContent, TextContent
 
-from .operations import cli_bridge, ribben_client, xml_measurements, xml_pattern
+from .operations import cli_bridge, ribben_client, xml_geometry, xml_measurements, xml_pattern
 from .prompt_text import PATTERN_DRAFTING_STRATEGY
 from .server_state import ServerState
 
@@ -257,6 +257,178 @@ def set_pattern_notes(path: str, text: str) -> list[TextContent]:
     except xml_pattern.PatternFileError as e:
         return _text(f"Error: {e}")
     return _text(f"Updated notes in {path}.")
+
+
+@mcp.tool(structured_output=False)
+def create_pattern(
+    path: str,
+    draft_block_name: str,
+    description: str = "",
+    unit: str = "cm",
+    measurements_file: str = "",
+) -> list[TextContent]:
+    """Create a brand-new pattern file with one empty draft block, to draft into from scratch.
+
+    Follow up with add_point_single (needed at least once, as a starting
+    anchor point) and then add_point_end_line/add_point_along_line/add_line
+    to build up the draft. Use validate_pattern after each meaningful step
+    to catch a broken reference or formula early.
+
+    Args:
+        path: Destination .sm2d path. Parent directories are created if missing.
+        draft_block_name: Name of the initial draft block (e.g. "Front").
+        description: Optional pattern description.
+        unit: "cm", "mm", or "inch" (default "cm").
+        measurements_file: Optional path to a .smis/.smms file -- only
+            needed once a formula references a measurement name; plain
+            coordinates and number formulas don't need one.
+
+    Returns:
+        A confirmation message.
+    """
+    try:
+        xml_geometry.create_pattern(
+            path, draft_block_name, description=description, unit=unit, measurements_file=measurements_file
+        )
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Created {path} with draft block {draft_block_name!r}.")
+
+
+@mcp.tool(structured_output=False)
+def list_points(path: str, draft_block_name: str) -> list[TextContent]:
+    """List the points in one draft block, in creation order.
+
+    Args:
+        path: Path to the .sm2d file.
+        draft_block_name: Name of the draft block to list points from.
+
+    Returns:
+        JSON list of each point's raw attributes (id, name, type, and
+        whichever type-specific attributes it has), so you can find a point
+        by name to reference in add_point_*/add_line.
+    """
+    try:
+        return _text(xml_geometry.list_points(path, draft_block_name))
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+
+
+@mcp.tool(structured_output=False)
+def add_point_single(
+    path: str, draft_block_name: str, name: str, x: float, y: float
+) -> list[TextContent]:
+    """Add an anchor point at explicit (x, y) canvas coordinates.
+
+    The only point type with no dependencies on other points -- every draft
+    needs at least one of these to start from. Units follow the pattern's
+    own unit (cm/mm/inch).
+
+    Args:
+        path: Path to the .sm2d file.
+        draft_block_name: Draft block to add the point to.
+        name: Point name (letters/numbers/underscore, must not start with a
+            digit or contain spaces/punctuation used by formulas).
+        x: X coordinate.
+        y: Y coordinate.
+
+    Returns:
+        A confirmation message including the new point's id.
+    """
+    try:
+        new_id = xml_geometry.add_point_single(path, draft_block_name, name, x, y)
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added point {name!r} (id {new_id}) at ({x}, {y}).")
+
+
+@mcp.tool(structured_output=False)
+def add_point_end_line(
+    path: str,
+    draft_block_name: str,
+    name: str,
+    base_point: str,
+    length: str,
+    angle: str,
+    line_type: str = "none",
+) -> list[TextContent]:
+    """Add a point at a given length and angle from an existing point.
+
+    This is the most commonly needed relative point type -- most hand-drawn
+    pattern construction steps ("go up 3cm, then right 2cm" etc.) are a
+    chain of these.
+
+    Args:
+        path: Path to the .sm2d file.
+        draft_block_name: Draft block to add the point to.
+        name: New point's name.
+        base_point: Name or id of the point to measure from (see list_points).
+        length: Distance, as a Seamly2D formula -- a plain number, an
+            increment name (e.g. "#Hemline"), or an expression.
+        angle: Angle in degrees (0 = along +x, counterclockwise), as a
+            plain number or formula.
+        line_type: Draws a visible line from base_point to the new point if
+            not "none" (e.g. "solidLine", "dashLine", "dotLine").
+
+    Returns:
+        A confirmation message including the new point's id.
+    """
+    try:
+        new_id = xml_geometry.add_point_end_line(
+            path, draft_block_name, name, base_point, length, angle, line_type=line_type
+        )
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added point {name!r} (id {new_id}), {length} at {angle} degrees from {base_point!r}.")
+
+
+@mcp.tool(structured_output=False)
+def add_point_along_line(
+    path: str, draft_block_name: str, name: str, first_point: str, second_point: str, length: str
+) -> list[TextContent]:
+    """Add a point at a given length along the line from first_point toward second_point.
+
+    Args:
+        path: Path to the .sm2d file.
+        draft_block_name: Draft block to add the point to.
+        name: New point's name.
+        first_point: Name or id of the point to measure from.
+        second_point: Name or id of the point defining the line's direction.
+        length: Distance from first_point, as a Seamly2D formula. May
+            exceed the first_point-second_point distance, extrapolating
+            past second_point.
+
+    Returns:
+        A confirmation message including the new point's id.
+    """
+    try:
+        new_id = xml_geometry.add_point_along_line(path, draft_block_name, name, first_point, second_point, length)
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added point {name!r} (id {new_id}), {length} along {first_point!r} -> {second_point!r}.")
+
+
+@mcp.tool(structured_output=False)
+def add_line(
+    path: str, draft_block_name: str, first_point: str, second_point: str, line_type: str = "solidLine"
+) -> list[TextContent]:
+    """Draw a plain visual line connecting two existing points.
+
+    Args:
+        path: Path to the .sm2d file.
+        draft_block_name: Draft block to add the line to.
+        first_point: Name or id of one endpoint.
+        second_point: Name or id of the other endpoint.
+        line_type: e.g. "solidLine", "dashLine", "dotLine", "hair".
+
+    Returns:
+        A confirmation message including the new line's id.
+    """
+    try:
+        new_id = xml_geometry.add_line(path, draft_block_name, first_point, second_point, line_type=line_type)
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added line (id {new_id}) from {first_point!r} to {second_point!r}.")
 
 
 def _ribben_connection(host: str | None, port: int | None, token: str | None) -> ribben_client.RibbenConnection:
