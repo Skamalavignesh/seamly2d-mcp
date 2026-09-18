@@ -925,6 +925,16 @@ def main():
         "(Claude Desktop), which never leaves this machine.",
     )
     parser.add_argument(
+        "--public-host",
+        action="append",
+        default=None,
+        help="Additional Host header value(s) to accept when --transport http is used -- e.g. "
+        "your tunnel's hostname, 'my-tunnel.trycloudflare.com' (no scheme/port). Can be given "
+        "multiple times. Needed because the transport's DNS-rebinding protection otherwise only "
+        "accepts 127.0.0.1/localhost and rejects every request arriving through a tunnel with "
+        "'421 Misdirected Request' / 'Invalid Host header'.",
+    )
+    parser.add_argument(
         "--ribben-host",
         default=None,
         help="Host for the Ribben addon's live JSON-RPC server (default: auto-detect, normally 127.0.0.1)",
@@ -950,12 +960,12 @@ def main():
     state.ribben_token = args.ribben_token
     logger.info("Starting Seamly2D MCP server")
     if args.transport == "http":
-        _run_http(args.host, args.port, args.http_token)
+        _run_http(args.host, args.port, args.http_token, args.public_host)
     else:
         mcp.run()
 
 
-def _build_http_app(token: str, host: str = "127.0.0.1"):
+def _build_http_app(token: str, host: str = "127.0.0.1", public_hosts: list[str] | None = None):
     """Wraps the SDK's own Streamable HTTP Starlette app with a bearer-token gate.
 
     Split out from _run_http so a test can drive it with an ASGI test client
@@ -967,7 +977,14 @@ def _build_http_app(token: str, host: str = "127.0.0.1"):
     server, which is more machinery than a single-user personal setup needs
     -- this is a plain shared-secret check on top of the SDK's own app
     instead.
+
+    public_hosts extends the SDK's own DNS-rebinding defense (which only
+    accepts 127.0.0.1/localhost/[::1] by default -- see
+    TransportSecuritySettings in the MCP SDK) to also accept a tunnel's
+    hostname, without which every tunneled request gets rejected with
+    "Invalid Host header" before it ever reaches the bearer-token check.
     """
+    from mcp.server.transport_security import TransportSecuritySettings
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.requests import Request
     from starlette.responses import JSONResponse
@@ -978,12 +995,23 @@ def _build_http_app(token: str, host: str = "127.0.0.1"):
                 return JSONResponse({"error": "Unauthorized"}, status_code=401)
             return await call_next(request)
 
-    app = mcp.streamable_http_app(host=host)
+    allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+    allowed_origins = list(allowed_hosts)
+    for extra in public_hosts or []:
+        allowed_hosts += [extra, f"{extra}:*"]
+        allowed_origins += [f"https://{extra}", f"http://{extra}"]
+
+    app = mcp.streamable_http_app(
+        host=host,
+        transport_security=TransportSecuritySettings(
+            allowed_hosts=allowed_hosts, allowed_origins=allowed_origins
+        ),
+    )
     app.add_middleware(RequireBearerToken)
     return app
 
 
-def _run_http(host: str, port: int, token: str | None) -> None:
+def _run_http(host: str, port: int, token: str | None, public_hosts: list[str] | None = None) -> None:
     """Serves the Streamable HTTP transport behind a required bearer token.
 
     This transport exists specifically so a remote client (ChatGPT, typically
@@ -1007,8 +1035,15 @@ def _run_http(host: str, port: int, token: str | None) -> None:
             "--http-token yourself.\n",
             file=sys.stderr,
         )
+    if not public_hosts:
+        print(
+            "No --public-host given -- only 127.0.0.1/localhost will be accepted as a Host "
+            "header. If this sits behind a tunnel, every tunneled request will be rejected "
+            "with 'Invalid Host header' until you pass --public-host <your-tunnel-hostname>.\n",
+            file=sys.stderr,
+        )
 
-    app = _build_http_app(token, host=host)
+    app = _build_http_app(token, host=host, public_hosts=public_hosts)
     logger.info(f"Serving Streamable HTTP on http://{host}:{port}/mcp (bearer token required)")
     uvicorn.run(app, host=host, port=port, log_level="warning")
 

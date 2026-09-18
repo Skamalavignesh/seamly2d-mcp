@@ -97,6 +97,25 @@ tunneling *from* this machine rather than redeploying the server elsewhere
 -- the Ribben addon only ever accepts loopback connections, so the MCP
 server has to stay on the same box as the running Seamly2D to reach it.
 
+**A tunnel needs one more flag.** The transport has its own separate
+DNS-rebinding defense (from the MCP SDK) that only accepts `127.0.0.1`/
+`localhost` as a request's `Host` header by default -- every request
+arriving through a tunnel gets `421 Misdirected Request` / "Invalid Host
+header" until you allowlist the tunnel's hostname:
+
+```bash
+uv run seamly2d-mcp --transport http --host 127.0.0.1 --port 8000 \
+  --http-token <a-secret-you-choose> \
+  --public-host my-tunnel-name.trycloudflare.com
+```
+
+`--public-host` can be repeated if the tunnel's hostname changes between
+runs (a `cloudflared tunnel --url http://localhost:8000` "quick tunnel"
+gets a new random hostname every time it starts, unless you set up a named
+tunnel). Verified against a real `cloudflared` quick tunnel end-to-end: a
+real MCP `initialize` handshake over the public HTTPS URL, with the correct
+bearer token and hostname both required.
+
 As of ChatGPT's current Developer Mode (Plus/Pro plans, Settings > Security
 and login > Developer mode > Plugins > connect your server URL), it also
 needs a server URL, the same as any other remote MCP client -- there's no

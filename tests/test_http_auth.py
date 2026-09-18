@@ -62,3 +62,40 @@ def test_correct_token_reaches_mcp_handshake():
         )
     assert response.status_code == 200
     assert "Seamly2DMCP" in response.text
+
+
+def test_untrusted_host_rejected_even_with_correct_token():
+    # Without --public-host, a request arriving with a tunnel's hostname
+    # (or anything other than 127.0.0.1/localhost) must still be rejected --
+    # that's the SDK's own DNS-rebinding defense, separate from and prior to
+    # the bearer-token check.
+    with _client() as client:
+        response = client.get(
+            "/mcp",
+            headers={"Authorization": f"Bearer {TOKEN}", "Host": "some-tunnel.trycloudflare.com"},
+        )
+    assert response.status_code == 421
+
+
+def test_public_host_allowlisted_reaches_mcp_handshake():
+    app = _build_http_app(TOKEN, public_hosts=["some-tunnel.trycloudflare.com"])
+    with TestClient(app, base_url="http://some-tunnel.trycloudflare.com") as client:
+        response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1.0"},
+                },
+            },
+            headers={
+                "Authorization": f"Bearer {TOKEN}",
+                "Accept": "application/json, text/event-stream",
+            },
+        )
+    assert response.status_code == 200
+    assert "Seamly2DMCP" in response.text

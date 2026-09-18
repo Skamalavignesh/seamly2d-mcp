@@ -56,6 +56,14 @@ they're completed; each is small enough to verify before moving on.
   (`_build_http_app`/`_run_http` in `server.py`). 3 new tests hitting the
   real app via an ASGI test client (missing/wrong/correct token), plus a
   live curl verification (401/401/200). Full suite: 66/66 passing.
+- [x] `--public-host` flag for the transport's separate DNS-rebinding
+  defense (from the MCP SDK, on top of the bearer token) -- found by
+  actually standing up a real `cloudflared` quick tunnel and hitting it:
+  every tunneled request was rejected with "Invalid Host header" until the
+  tunnel's hostname was allowlisted. 2 more tests (untrusted host rejected
+  even with the right token; allowlisted host succeeds). Verified against
+  the real running tunnel with a full MCP initialize handshake over the
+  public HTTPS URL. Full suite: 68/68 passing.
 - [ ] Point/piece-level geometry edit tools (needs deeper `.sm2d` schema work)
 - [x] `seamlyme.exe` CLI investigation — ran `--help` live: no export/format flags (measurement-editor GUI only), but it does have a `--test` silent-load mode symmetric to `seamly2d.exe -t`. Added `validate_measurements` tool + `detect_seamlyme_exe`/`--seamlyme-exe` flag on top of it. Verified against real `.smis` and `.smms` fixtures. 32/32 tests passing.
 
