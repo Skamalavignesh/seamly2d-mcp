@@ -176,3 +176,56 @@ def update_increment(conn: RibbenConnection, name: str, formula: str) -> dict[st
 
 def set_pattern_notes(conn: RibbenConnection, text: str) -> dict[str, Any]:
     return _call("set_pattern_notes", {"text": text}, conn)
+
+
+def list_points(conn: RibbenConnection, draft_block_name: str) -> list[dict[str, Any]]:
+    return _call("list_points", {"draft_block_name": draft_block_name}, conn).get("points", [])
+
+
+def add_point_single(conn: RibbenConnection, draft_block_name: str, name: str, x: float, y: float) -> dict[str, Any]:
+    return _call(
+        "add_point_single", {"draft_block_name": draft_block_name, "name": name, "x": x, "y": y}, conn
+    )
+
+
+def add_point_end_line(
+    conn: RibbenConnection,
+    draft_block_name: str,
+    name: str,
+    base_point: str,
+    length: str,
+    angle: str,
+    line_type: str = "none",
+) -> dict[str, Any]:
+    return _call(
+        "add_point_end_line",
+        {
+            "draft_block_name": draft_block_name, "name": name, "base_point": base_point,
+            "length": length, "angle": angle, "line_type": line_type,
+        },
+        conn,
+    )
+
+
+def add_point_along_line(
+    conn: RibbenConnection, draft_block_name: str, name: str, first_point: str, second_point: str, length: str
+) -> dict[str, Any]:
+    return _call(
+        "add_point_along_line",
+        {
+            "draft_block_name": draft_block_name, "name": name,
+            "first_point": first_point, "second_point": second_point, "length": length,
+        },
+        conn,
+    )
+
+
+def add_line(
+    conn: RibbenConnection, draft_block_name: str, first_point: str, second_point: str, line_type: str = "solidLine"
+) -> dict[str, Any]:
+    return _call(
+        "add_line",
+        {"draft_block_name": draft_block_name, "first_point": first_point, "second_point": second_point,
+         "line_type": line_type},
+        conn,
+    )

@@ -70,7 +70,7 @@ examples. Summary:
 | `validate_pattern` | Silently load a pattern to check it rebuilds cleanly. |
 | `validate_measurements` | Silently load a measurement file (via SeamlyMe) to check it parses cleanly. |
 | `ping` | Health check. |
-| `live_ping` / `live_status` / `live_read_pattern` / `live_list_increments` / `live_update_increment` / `live_set_pattern_notes` | Same as the tools above, but live against a *running* Seamly2D via its Ribben addon instead of a file on disk — see [Live connection](#live-connection-ribben-addon) below. |
+| `live_ping` / `live_status` / `live_read_pattern` / `live_list_increments` / `live_update_increment` / `live_set_pattern_notes` / `live_list_points` / `live_add_point_single` / `live_add_point_end_line` / `live_add_point_along_line` / `live_add_line` | Same as the tools above, but live against a *running* Seamly2D via its Ribben addon instead of a file on disk — new geometry appears in the open window immediately. See [Live connection](#live-connection-ribben-addon) below. |
 
 All file-mutating tools (`update_measurements`, `update_increment`,
 `set_pattern_notes`) back up the original file to `<path>.bak` before writing.

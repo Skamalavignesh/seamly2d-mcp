@@ -72,7 +72,8 @@ milestone wires this server up to that addon instead of/alongside file edits.
   all confirmed working through the actual MCP tool functions, not just the
   client module
 - [ ] `live_render`/live measurement tools (the addon only exposes pattern
-  metadata + increments + notes so far — see the addon's own RIBBEN.md TODO)
+  metadata + increments + notes + geometry so far — see the addon's own
+  RIBBEN.md TODO)
 
 ## Milestone 7 — Draft new geometry from scratch (file-based)
 The one deferred item from Milestone 2 ("point/piece-level geometry editing")
@@ -107,9 +108,46 @@ instead of all of them at once.
 - [ ] Piece outlines (`<pieces>` — needed before `render_pattern` can export
   anything from a from-scratch draft; a separate tool surface mirroring
   Seamly2D's own Draft → Piece mode split)
-- [ ] A live (Ribben-addon-backed) version of geometry creation, so new
+- [x] A live (Ribben-addon-backed) version of geometry creation, so new
   points appear in a running Seamly2D immediately the way live_update_increment
-  does — much larger scope, see the addon's own RIBBEN.md TODO
+  does — see Milestone 8.
+
+## Milestone 8 — Draft new geometry from scratch, live
+The inspiration for this whole live-connection effort: FreeCAD's own MCP
+addon lets you prompt Claude and watch shapes appear in the open FreeCAD
+window immediately, because FreeCAD has a live Python scripting console.
+Seamly2D doesn't -- but its own Undo/Redo already does a full rebuild of the
+visible scene from the pattern's live XML document on every use
+(`MainWindow::fullParseFile()` / `doc->Parse(Document::FullParse)`), and
+that turned out to be reusable: insert a new `<point>`/`<line>` into the
+already-open document, trigger that same rebuild, and the new geometry
+appears on screen exactly like an undone/redone one would.
+- [x] `listPoints`/`addPointSingle`/`addPointEndLine`/`addPointAlongLine`/
+  `addLine` added to the addon's `RibbenHost` interface and implemented in
+  `MainWindow` (see `E:\seamly2d-ribben`'s `ribbenmainwindowhost.cpp`),
+  grounded in the exact same schema/attribute constants (`ifcdef.h`,
+  `VContainer::getNextId()`) as the file-based version, kept in sync
+  deliberately (same point types, same attribute names)
+- [x] Rollback on failure (`ribbenReparseOrRollback`): calling
+  `doc->Parse(Document::FullParse)` directly rather than through the
+  existing `fullParseFile()` slot, because that slot *swallows*
+  `VExceptionObjectError`/`VExceptionConversionError` internally (logs them,
+  disables the GUI) instead of propagating them -- which would leave a bad
+  live_add_point_* call both invisible to the caller and the GUI silently
+  disabled. On failure, the bad element is removed and the document
+  re-parsed again before the error is reported.
+- [x] `live_list_points`/`live_add_point_single`/`live_add_point_end_line`/
+  `live_add_point_along_line`/`live_add_line` tools in `server.py`
+- [x] 5 new tests against the fake TCP server. Full suite: 63/63 passing.
+- [x] Verified against the real running app, twice: (1) raw socket calls
+  confirmed the new points/lines were created without error; (2) a
+  screenshot of the **already-open, unmodified** window, taken immediately
+  after the tool calls with no save/reopen/refresh, showed the new points
+  and their connecting line rendered on screen -- the actual "prompt Claude,
+  watch it happen live" experience that motivated this whole project.
+- [ ] Live curves/arcs, live piece outlines -- same gap as Milestone 7's
+  file-based version, now doubled (needs both the file-format work and the
+  live C++ wiring)
 
 ---
 **Check-in convention:** after finishing an item, mark it `[x]` here and say so

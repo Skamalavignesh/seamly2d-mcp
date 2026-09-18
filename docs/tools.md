@@ -166,6 +166,20 @@ the pattern.
 ### `live_set_pattern_notes`
 Live equivalent of `set_pattern_notes`.
 
+### `live_list_points` / `live_add_point_single` / `live_add_point_end_line` / `live_add_point_along_line` / `live_add_line`
+Live equivalents of the [drafting geometry](#drafting-geometry-from-scratch)
+tools above, with the same arguments -- but the new point/line **appears in
+the open Seamly2D window immediately**, the same way an Undo/Redo does,
+instead of only showing up after the file is reopened. This is the one
+capability the file-based tools genuinely can't match: watch a pattern get
+drafted live while it happens, prompt by prompt.
+```json
+{"draft_block_name": "Front", "name": "A2", "base_point": "A1", "length": "20", "angle": "0"}
+```
+An invalid length/angle formula doesn't leave the pattern half-broken: the
+failed point is rolled back and the document re-parsed again before the
+error is returned.
+
 ## Render / validate
 
 ### `render_pattern`

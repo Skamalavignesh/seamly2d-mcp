@@ -61,6 +61,20 @@ class FakeRibbenServer:
         if method == "update_increment":
             return {"jsonrpc": "2.0", "id": request["id"],
                      "error": {"code": 3, "message": "No increment named \"bar\"."}}
+        if method == "list_points":
+            return {"jsonrpc": "2.0", "id": request["id"],
+                     "result": {"points": [{"id": "1", "name": "A1", "type": "single", "x": "0", "y": "0"}]}}
+        if method == "add_point_single":
+            return {"jsonrpc": "2.0", "id": request["id"],
+                     "result": {"id": 2, "name": request["params"]["name"]}}
+        if method == "add_point_end_line":
+            return {"jsonrpc": "2.0", "id": request["id"],
+                     "error": {"code": 3, "message": "No point named or with id \"ghost\"."}}
+        if method == "add_point_along_line":
+            return {"jsonrpc": "2.0", "id": request["id"],
+                     "result": {"id": 3, "name": request["params"]["name"]}}
+        if method == "add_line":
+            return {"jsonrpc": "2.0", "id": request["id"], "result": {"id": 4}}
         return {"jsonrpc": "2.0", "id": request.get("id"),
                  "error": {"code": -32601, "message": f"Unknown method {method!r}."}}
 
@@ -134,3 +148,29 @@ def test_resolve_connection_raises_helpful_error_when_nothing_found(tmp_path, mo
 def test_resolve_connection_prefers_explicit_token():
     conn = rc.resolve_connection(host="10.0.0.5", port=9999, token="explicit")
     assert conn == rc.RibbenConnection(host="10.0.0.5", port=9999, token="explicit")
+
+
+def test_list_points(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    assert rc.list_points(conn, "Front") == [{"id": "1", "name": "A1", "type": "single", "x": "0", "y": "0"}]
+
+
+def test_add_point_single(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    assert rc.add_point_single(conn, "Front", "A1", 0, 0) == {"id": 2, "name": "A1"}
+
+
+def test_add_point_end_line_unknown_reference_raises(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    with pytest.raises(rc.RibbenClientError, match="No point named or with id"):
+        rc.add_point_end_line(conn, "Front", "A2", "ghost", "10", "0")
+
+
+def test_add_point_along_line(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    assert rc.add_point_along_line(conn, "Front", "A3", "A1", "A2", "5") == {"id": 3, "name": "A3"}
+
+
+def test_add_line(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    assert rc.add_line(conn, "Front", "A1", "A2") == {"id": 4}

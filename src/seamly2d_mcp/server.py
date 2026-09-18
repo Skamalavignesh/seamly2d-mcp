@@ -597,6 +597,167 @@ def live_set_pattern_notes(
 
 
 @mcp.tool(structured_output=False)
+def live_list_points(
+    draft_block_name: str, host: str | None = None, port: int | None = None, token: str | None = None
+) -> list[TextContent]:
+    """List the points in one draft block of the pattern open in a running Seamly2D, live.
+
+    Live counterpart to list_points -- see live_read_pattern for what "live"
+    means here and how the addon is reached.
+
+    Args:
+        draft_block_name: Name of the draft block to list points from.
+        host: Override the addon's host (default: auto-detect).
+        port: Override the addon's port (default: auto-detect).
+        token: Override the addon's auth token (default: auto-detect).
+
+    Returns:
+        JSON list of each point's raw attributes (id, name, type, and
+        whichever type-specific attributes it has).
+    """
+    try:
+        conn = _ribben_connection(host, port, token)
+        return _text(ribben_client.list_points(conn, draft_block_name))
+    except ribben_client.RibbenClientError as e:
+        return _text(f"Error: {e}")
+
+
+@mcp.tool(structured_output=False)
+def live_add_point_single(
+    draft_block_name: str, name: str, x: float, y: float,
+    host: str | None = None, port: int | None = None, token: str | None = None,
+) -> list[TextContent]:
+    """Add an anchor point at explicit (x, y) coordinates to a running Seamly2D, live.
+
+    Unlike the file-based add_point_single, the new point appears in the
+    open window immediately -- the same live rebuild Seamly2D's own Undo/Redo
+    already triggers, repurposed here for a fresh addition instead of an
+    undo step. See live_read_pattern for how the addon is reached.
+
+    Args:
+        draft_block_name: Draft block to add the point to.
+        name: Point name (letters/numbers/underscore, must not start with a
+            digit or contain spaces/punctuation used by formulas).
+        x: X coordinate.
+        y: Y coordinate.
+        host: Override the addon's host (default: auto-detect).
+        port: Override the addon's port (default: auto-detect).
+        token: Override the addon's auth token (default: auto-detect).
+
+    Returns:
+        A confirmation message including the new point's id.
+    """
+    try:
+        conn = _ribben_connection(host, port, token)
+        result = ribben_client.add_point_single(conn, draft_block_name, name, x, y)
+    except ribben_client.RibbenClientError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added point {result.get('name')!r} (id {result.get('id')}) at ({x}, {y}), live.")
+
+
+@mcp.tool(structured_output=False)
+def live_add_point_end_line(
+    draft_block_name: str, name: str, base_point: str, length: str, angle: str, line_type: str = "none",
+    host: str | None = None, port: int | None = None, token: str | None = None,
+) -> list[TextContent]:
+    """Add a point at a given length and angle from an existing point, live.
+
+    Live counterpart to add_point_end_line -- appears in the open window
+    immediately. See live_add_point_single for what "live" means here.
+
+    Args:
+        draft_block_name: Draft block to add the point to.
+        name: New point's name.
+        base_point: Name or id of the point to measure from (see live_list_points).
+        length: Distance, as a Seamly2D formula -- a plain number, an
+            increment name (e.g. "#Hemline"), or an expression.
+        angle: Angle in degrees (0 = along +x, counterclockwise), as a
+            plain number or formula.
+        line_type: Draws a visible line from base_point to the new point if
+            not "none" (e.g. "solidLine", "dashLine", "dotLine").
+        host: Override the addon's host (default: auto-detect).
+        port: Override the addon's port (default: auto-detect).
+        token: Override the addon's auth token (default: auto-detect).
+
+    Returns:
+        A confirmation message including the new point's id.
+    """
+    try:
+        conn = _ribben_connection(host, port, token)
+        result = ribben_client.add_point_end_line(conn, draft_block_name, name, base_point, length, angle, line_type)
+    except ribben_client.RibbenClientError as e:
+        return _text(f"Error: {e}")
+    return _text(
+        f"Added point {result.get('name')!r} (id {result.get('id')}), "
+        f"{length} at {angle} degrees from {base_point!r}, live."
+    )
+
+
+@mcp.tool(structured_output=False)
+def live_add_point_along_line(
+    draft_block_name: str, name: str, first_point: str, second_point: str, length: str,
+    host: str | None = None, port: int | None = None, token: str | None = None,
+) -> list[TextContent]:
+    """Add a point at a given length along the line from first_point toward second_point, live.
+
+    Live counterpart to add_point_along_line -- appears in the open window
+    immediately. See live_add_point_single for what "live" means here.
+
+    Args:
+        draft_block_name: Draft block to add the point to.
+        name: New point's name.
+        first_point: Name or id of the point to measure from.
+        second_point: Name or id of the point defining the line's direction.
+        length: Distance from first_point, as a Seamly2D formula.
+        host: Override the addon's host (default: auto-detect).
+        port: Override the addon's port (default: auto-detect).
+        token: Override the addon's auth token (default: auto-detect).
+
+    Returns:
+        A confirmation message including the new point's id.
+    """
+    try:
+        conn = _ribben_connection(host, port, token)
+        result = ribben_client.add_point_along_line(conn, draft_block_name, name, first_point, second_point, length)
+    except ribben_client.RibbenClientError as e:
+        return _text(f"Error: {e}")
+    return _text(
+        f"Added point {result.get('name')!r} (id {result.get('id')}), "
+        f"{length} along {first_point!r} -> {second_point!r}, live."
+    )
+
+
+@mcp.tool(structured_output=False)
+def live_add_line(
+    draft_block_name: str, first_point: str, second_point: str, line_type: str = "solidLine",
+    host: str | None = None, port: int | None = None, token: str | None = None,
+) -> list[TextContent]:
+    """Draw a plain visual line connecting two existing points, live.
+
+    Live counterpart to add_line -- appears in the open window immediately.
+    See live_add_point_single for what "live" means here.
+
+    Args:
+        draft_block_name: Draft block to add the line to.
+        first_point: Name or id of one endpoint.
+        second_point: Name or id of the other endpoint.
+        line_type: e.g. "solidLine", "dashLine", "dotLine", "hair".
+        host: Override the addon's host (default: auto-detect).
+        port: Override the addon's port (default: auto-detect).
+        token: Override the addon's auth token (default: auto-detect).
+
+    Returns:
+        A confirmation message including the new line's id.
+    """
+    try:
+        conn = _ribben_connection(host, port, token)
+        result = ribben_client.add_line(conn, draft_block_name, first_point, second_point, line_type)
+    except ribben_client.RibbenClientError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added line (id {result.get('id')}) from {first_point!r} to {second_point!r}, live.")
+
+
+@mcp.tool(structured_output=False)
 def render_pattern(
     path: str,
     dest_dir: str,
