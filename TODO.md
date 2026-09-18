@@ -45,6 +45,17 @@ they're completed; each is small enough to verify before moving on.
 
 ## Milestone 5 — Stretch (not blocking v1)
 - [x] ChatGPT-compatible HTTP transport — `mcp==2.2.0`'s `MCPServer` has Streamable HTTP built in (`mcp.run(transport="streamable-http", ...)`), no separate OpenAPI wrapper needed. Added `--transport {stdio,http}` + `--host`/`--port` flags. Verified with a real JSON-RPC initialize -> initialized -> tools/list handshake over curl (not just "port opens"), then confirmed clean shutdown. Actually reaching it from ChatGPT still needs the endpoint exposed over public HTTPS (tunnel or deployment) — that part is outside this project, documented in docs/installation.md
+- [x] Required bearer-token auth on the HTTP transport (`--http-token`, or an
+  auto-generated one printed at startup) — added once actually setting up
+  the ChatGPT connection surfaced that the transport had no auth of its own,
+  so a tunnel URL alone would let anyone call every tool, including ones
+  that write files or drive a live Seamly2D. The SDK's own OAuth-oriented
+  `AuthSettings`/`TokenVerifier` needs a real authorization server, more
+  than a single-user setup needs, so this is a plain shared-secret
+  Starlette middleware on top of the SDK's own app instead
+  (`_build_http_app`/`_run_http` in `server.py`). 3 new tests hitting the
+  real app via an ASGI test client (missing/wrong/correct token), plus a
+  live curl verification (401/401/200). Full suite: 66/66 passing.
 - [ ] Point/piece-level geometry edit tools (needs deeper `.sm2d` schema work)
 - [x] `seamlyme.exe` CLI investigation — ran `--help` live: no export/format flags (measurement-editor GUI only), but it does have a `--test` silent-load mode symmetric to `seamly2d.exe -t`. Added `validate_measurements` tool + `detect_seamlyme_exe`/`--seamlyme-exe` flag on top of it. Verified against real `.smis` and `.smms` fixtures. 32/32 tests passing.
 

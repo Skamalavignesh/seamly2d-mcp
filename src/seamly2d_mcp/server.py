@@ -1,5 +1,6 @@
 import base64
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -914,6 +915,16 @@ def main():
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind for --transport http")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind for --transport http")
     parser.add_argument(
+        "--http-token",
+        default=None,
+        help="Bearer token required on every request when --transport http is used (default: "
+        "a random one is generated and printed once at startup). Required because this "
+        "transport is meant to sit behind a public tunnel for remote clients like ChatGPT -- "
+        "without it, anyone with the tunnel URL could call every tool, including the ones "
+        "that write files or drive a live Seamly2D. Not used/needed for --transport stdio "
+        "(Claude Desktop), which never leaves this machine.",
+    )
+    parser.add_argument(
         "--ribben-host",
         default=None,
         help="Host for the Ribben addon's live JSON-RPC server (default: auto-detect, normally 127.0.0.1)",
@@ -939,10 +950,67 @@ def main():
     state.ribben_token = args.ribben_token
     logger.info("Starting Seamly2D MCP server")
     if args.transport == "http":
-        logger.info(f"Serving Streamable HTTP on http://{args.host}:{args.port}/mcp")
-        mcp.run(transport="streamable-http", host=args.host, port=args.port)
+        _run_http(args.host, args.port, args.http_token)
     else:
         mcp.run()
+
+
+def _build_http_app(token: str, host: str = "127.0.0.1"):
+    """Wraps the SDK's own Streamable HTTP Starlette app with a bearer-token gate.
+
+    Split out from _run_http so a test can drive it with an ASGI test client
+    instead of needing a real bound socket.
+
+    A tunnel URL alone is not a secret: it can leak through browser history,
+    logs, or the tunnel provider's own status pages. The MCP SDK's own auth
+    support (AuthSettings/TokenVerifier) assumes a real OAuth authorization
+    server, which is more machinery than a single-user personal setup needs
+    -- this is a plain shared-secret check on top of the SDK's own app
+    instead.
+    """
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    class RequireBearerToken(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            if request.headers.get("authorization") != f"Bearer {token}":
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            return await call_next(request)
+
+    app = mcp.streamable_http_app(host=host)
+    app.add_middleware(RequireBearerToken)
+    return app
+
+
+def _run_http(host: str, port: int, token: str | None) -> None:
+    """Serves the Streamable HTTP transport behind a required bearer token.
+
+    This transport exists specifically so a remote client (ChatGPT, typically
+    reached through a public tunnel -- see docs/installation.md) can call the
+    same tools Claude Desktop's local stdio transport does, including the
+    ones that write pattern files or drive a live, open Seamly2D via the
+    Ribben addon.
+    """
+    import secrets
+
+    import uvicorn
+
+    if not token:
+        token = secrets.token_hex(32)
+        print(
+            f"\nNo --http-token given; generated one for this run:\n\n    {token}\n\n"
+            "Put this in your remote client's connector auth as a Bearer token (e.g. ChatGPT's "
+            "Developer Mode custom connector settings). Anyone with both your tunnel URL and "
+            "this token can call every tool here, including ones that write files or drive a "
+            "live Seamly2D -- don't share it. It's regenerated every run unless you pass "
+            "--http-token yourself.\n",
+            file=sys.stderr,
+        )
+
+    app = _build_http_app(token, host=host)
+    logger.info(f"Serving Streamable HTTP on http://{host}:{port}/mcp (bearer token required)")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
 
 
 if __name__ == "__main__":

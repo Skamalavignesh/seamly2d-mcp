@@ -66,20 +66,46 @@ directly or shells out to `seamly2d.exe` for a one-off headless export (see
 
 The server can also run over HTTP instead of stdio, using the MCP SDK's
 built-in Streamable HTTP transport (verified with a real JSON-RPC
-initialize/tools-list handshake over curl, not just "the port opens"):
+initialize/tools-list handshake over curl, not just "the port opens"),
+behind a **required bearer token** -- every request without a matching
+`Authorization: Bearer <token>` header gets a 401, verified with real HTTP
+requests (correct/missing/wrong token) in `tests/test_http_auth.py`:
 
 ```bash
-uv run seamly2d-mcp --transport http --host 127.0.0.1 --port 8000
+uv run seamly2d-mcp --transport http --host 127.0.0.1 --port 8000 --http-token <a-secret-you-choose>
 ```
+
+Omit `--http-token` and the server generates a random one and prints it once
+at startup instead of refusing to start -- convenient for a quick local
+test, but pass your own for anything you'll leave running.
+
+**Why the token is required, not optional:** once this endpoint sits behind
+a public tunnel (below), the tunnel URL is not itself a secret -- it can
+leak through browser history, logs, or the tunnel provider's own status
+pages. Every tool here is reachable through this transport, including the
+ones that write pattern files anywhere on disk, shell out to `seamly2d.exe`,
+and drive a live, open Seamly2D via the Ribben addon. Without the token,
+anyone who finds the URL could do all of that.
 
 This serves the MCP endpoint at `http://127.0.0.1:8000/mcp`. To connect
 ChatGPT (or any other remote MCP client) to it, the endpoint needs to be
 reachable over HTTPS from wherever that client runs -- for a machine behind
 NAT/a home network, that means a tunnel (e.g. `ngrok http 8000` or
 Cloudflare Tunnel) or an actual public deployment; `127.0.0.1` by itself is
-only reachable from this machine. ChatGPT's own connector setup UI is where
-you'd register the resulting HTTPS URL -- that part is on the ChatGPT side
-and outside this project.
+only reachable from this machine. Keep the live addon's own advantages by
+tunneling *from* this machine rather than redeploying the server elsewhere
+-- the Ribben addon only ever accepts loopback connections, so the MCP
+server has to stay on the same box as the running Seamly2D to reach it.
+
+As of ChatGPT's current Developer Mode (Plus/Pro plans, Settings > Security
+and login > Developer mode > Plugins > connect your server URL), it also
+needs a server URL, the same as any other remote MCP client -- there's no
+separate "local" path even from the ChatGPT desktop app. Register the
+tunnel's HTTPS URL there, and provide the bearer token as that connector's
+auth. That part is on ChatGPT's side and outside this project, and its
+exact steps are subject to change -- see OpenAI's own docs for the current
+UI.
 
 Claude Desktop should keep using the stdio transport (the default, no flags
-needed) shown above -- there's no reason to add the network hop locally.
+needed) shown above -- there's no reason to add the network hop, or the
+token, locally.
