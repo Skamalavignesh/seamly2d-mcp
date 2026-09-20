@@ -75,6 +75,21 @@ class FakeRibbenServer:
                      "result": {"id": 3, "name": request["params"]["name"]}}
         if method == "add_line":
             return {"jsonrpc": "2.0", "id": request["id"], "result": {"id": 4}}
+        if method == "add_spline":
+            return {"jsonrpc": "2.0", "id": request["id"], "result": {"id": 5}}
+        if method == "add_arc":
+            return {"jsonrpc": "2.0", "id": request["id"],
+                     "error": {"code": 3, "message": "No point named or with id \"ghost\"."}}
+        if method == "list_pieces":
+            return {"jsonrpc": "2.0", "id": request["id"],
+                     "result": {"pieces": [{"id": "6", "name": "Front Panel", "seamAllowance": "true",
+                                             "outline": [{"idObject": "1", "type": "NodePoint"}]}]}}
+        if method == "add_piece":
+            outline = request["params"]["outline"]
+            if len(outline) < 2:
+                return {"jsonrpc": "2.0", "id": request["id"],
+                         "error": {"code": -32602, "message": "a piece outline needs at least 2 nodes"}}
+            return {"jsonrpc": "2.0", "id": request["id"], "result": {"id": 7}}
         return {"jsonrpc": "2.0", "id": request.get("id"),
                  "error": {"code": -32601, "message": f"Unknown method {method!r}."}}
 
@@ -174,3 +189,32 @@ def test_add_point_along_line(fake_server):
 def test_add_line(fake_server):
     conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
     assert rc.add_line(conn, "Front", "A1", "A2") == {"id": 4}
+
+
+def test_add_spline(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    assert rc.add_spline(conn, "Front", "A1", "A2") == {"id": 5}
+
+
+def test_add_arc_unknown_reference_raises(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    with pytest.raises(rc.RibbenClientError, match="No point named or with id"):
+        rc.add_arc(conn, "Front", "ghost", "5", "0", "180")
+
+
+def test_list_pieces(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    assert rc.list_pieces(conn, "Front") == [
+        {"id": "6", "name": "Front Panel", "seamAllowance": "true", "outline": [{"idObject": "1", "type": "NodePoint"}]}
+    ]
+
+
+def test_add_piece(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    assert rc.add_piece(conn, "Front", "Front Panel", [{"point": "A1"}, {"point": "A2"}]) == {"id": 7}
+
+
+def test_add_piece_too_few_nodes_raises(fake_server):
+    conn = rc.RibbenConnection(host="127.0.0.1", port=fake_server.port, token=TOKEN)
+    with pytest.raises(rc.RibbenClientError, match="at least 2 nodes"):
+        rc.add_piece(conn, "Front", "Front Panel", [{"point": "A1"}])

@@ -122,11 +122,42 @@ instead of all of them at once.
   real Seamly2D and confirmed visually — the derived point (`alongLine`)
   landed exactly on the expected line, confirming the geometry math and XML
   structure are correct, not just "doesn't crash on load"
-- [ ] Curves/arcs (`<spline>`/`<arc>` elements — more attribute variants,
-  not yet grounded the way the point/line types above are)
-- [ ] Piece outlines (`<pieces>` — needed before `render_pattern` can export
-  anything from a from-scratch draft; a separate tool surface mirroring
-  Seamly2D's own Draft → Piece mode split)
+- [x] Curves/arcs (`<spline>`/`<arc>` elements): `add_spline` (cubic-Bezier
+  `simpleInteractive` spline between two existing points, each end with its
+  own angle+length tangent handle) and `add_arc` (circular `simple` arc
+  around an existing center point). Spline grounded in real sample-file
+  usage (`male_shirt.sm2d` has several real `simpleInteractive` splines with
+  this exact attribute shape); arc has no sample-file example, so grounded
+  directly in the C++ tool that writes it
+  (`VToolArc::SaveOptions`/`vtoolarc.cpp` in the Seamly2D source) instead.
+  10 new tests (XML shape, unknown-reference errors, shared id counter with
+  points/lines). Verified end-to-end: a pattern drafted with both a spline
+  and an arc, purely through these functions, loads and rebuilds cleanly
+  under the real installed `seamly2d.exe -t`. `render_pattern` on that same
+  file correctly fails with "can't export empty scene" — expected, since it
+  has no piece outlines yet (the next item below), not a bug in this one.
+  No GUI screenshot verification this round (no desktop screenshot tool
+  available in this session, only the embedded browser pane) — worth an
+  eyeball check in the real Seamly2D GUI when convenient.
+- [x] Piece outlines (`<pieces>`): `add_piece` builds a seam-allowance
+  outline from existing points/splines/arcs, and `list_pieces` reads them
+  back. Grounded in the real C++ tool source (`VNodePoint`/`VNodeSpline`/
+  `VNodeArc::AddToFile` in `src/libs/vtools/tools/nodeDetails/` and
+  `PatternPieceTool::addAttributes` in
+  `src/libs/vtools/tools/pattern_piece_tool.cpp`), which surfaced a wrinkle
+  no amount of schema-reading alone would have: a `<piece>` can't reference
+  `<calculation>` geometry directly — each referenced point/spline/arc first
+  needs a thin wrapper in `<modeling>` (fresh id, `idObject` pointing back
+  at the original), and the piece's `<nodes>` reference those modeling ids
+  instead. `add_piece` does that promotion automatically. 10 new tests
+  (XML shape, modeling promotion, curve nodes with `reverse`, unknown
+  references, too-few-nodes, ambiguous node, global id counter). Verified
+  end-to-end against the real installed `seamly2d.exe`: a pattern drafted
+  purely through these tools (points + a curve + a piece) not only
+  `validate_pattern`s cleanly, `render_pattern` now actually **succeeds** —
+  exported a real SVG containing a `Front Panel`-named group with real path
+  geometry, unlike the curve/arc-only round above which correctly failed
+  with "can't export empty scene" for lack of a piece.
 - [x] A live (Ribben-addon-backed) version of geometry creation, so new
   points appear in a running Seamly2D immediately the way live_update_increment
   does — see Milestone 8.
@@ -164,9 +195,28 @@ appears on screen exactly like an undone/redone one would.
   after the tool calls with no save/reopen/refresh, showed the new points
   and their connecting line rendered on screen -- the actual "prompt Claude,
   watch it happen live" experience that motivated this whole project.
-- [ ] Live curves/arcs, live piece outlines -- same gap as Milestone 7's
-  file-based version, now doubled (needs both the file-format work and the
-  live C++ wiring)
+- [x] Live curves/arcs, live piece outlines -- `addSpline`/`addArc`/
+  `listPieces`/`addPiece` added to `RibbenHost` (ribbenhost.h), implemented
+  in `MainWindow` (`ribbenmainwindowhost.cpp`, mirroring the file-based
+  xml_geometry.py functions attribute-for-attribute -- same
+  "simpleInteractive" spline, "simple" arc, and modeling-promotion dance for
+  pieces), and wired into `RibbenDispatcher`. `addPiece`'s rollback covers
+  every element it inserted (all the modeling wrappers plus the piece
+  itself), not just one, since a single reparse failure needs to undo the
+  whole multi-element write atomically. Built clean with the project's own
+  Qt 6.7.3 + MinGW 11.2.0 toolchain (`mingw32-make` from the repo root, via
+  a real Unix shell -- the generated Makefiles call `test`, which plain
+  PowerShell doesn't have) -- zero errors/warnings on the new code. Verified
+  against the real running app, live: `add_spline`/`add_arc`/`add_piece`
+  over the actual socket connection created real geometry (ids sequential
+  and correct across points/spline/arc/modeling-wrappers/piece), `get_status`
+  reported `piece_count` incrementing, and both an unknown-point-reference
+  and a too-few-nodes call were correctly rejected with the pattern left
+  unchanged (checked via list_points/get_status before and after). Python
+  side: `add_spline`/`add_arc`/`list_pieces`/`add_piece` added to
+  `ribben_client.py` and `live_add_spline`/`live_add_arc`/`live_list_pieces`/
+  `live_add_piece` tools added to `server.py`. 5 new tests against the fake
+  TCP server. Full Python suite: 89/89 passing.
 
 ---
 **Check-in convention:** after finishing an item, mark it `[x]` here and say so

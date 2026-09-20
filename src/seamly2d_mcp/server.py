@@ -432,6 +432,147 @@ def add_line(
     return _text(f"Added line (id {new_id}) from {first_point!r} to {second_point!r}.")
 
 
+@mcp.tool(structured_output=False)
+def add_spline(
+    path: str,
+    draft_block_name: str,
+    first_point: str,
+    second_point: str,
+    angle1: str = "0",
+    length1: str = "1",
+    angle2: str = "0",
+    length2: str = "1",
+) -> list[TextContent]:
+    """Draw a cubic-Bezier curve between two existing points (the "Curve" tool).
+
+    Each end of the curve has its own tangent control handle, expressed the
+    same "angle + length" way add_point_end_line expresses a new point,
+    rather than as raw control-point coordinates.
+
+    Args:
+        path: Path to the .sm2d file.
+        draft_block_name: Draft block to add the curve to.
+        first_point: Name or id of the point the curve starts at (see list_points).
+        second_point: Name or id of the point the curve ends at.
+        angle1: Tangent direction at first_point, in degrees (0 = along +x,
+            counterclockwise), as a plain number or formula.
+        length1: Tangent handle length at first_point -- bigger pulls the
+            curve further before it bends toward second_point.
+        angle2: Tangent direction at second_point, same convention as angle1.
+        length2: Tangent handle length at second_point.
+
+    Returns:
+        A confirmation message including the new curve's id.
+    """
+    try:
+        new_id = xml_geometry.add_spline(
+            path, draft_block_name, first_point, second_point,
+            angle1=angle1, length1=length1, angle2=angle2, length2=length2,
+        )
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added curve (id {new_id}) from {first_point!r} to {second_point!r}.")
+
+
+@mcp.tool(structured_output=False)
+def add_arc(
+    path: str,
+    draft_block_name: str,
+    center_point: str,
+    radius: str,
+    angle1: str,
+    angle2: str,
+) -> list[TextContent]:
+    """Draw a circular arc around an existing center point (the "Arc" tool).
+
+    Args:
+        path: Path to the .sm2d file.
+        draft_block_name: Draft block to add the arc to.
+        center_point: Name or id of the existing point to center the arc on.
+        radius: Arc radius, as a plain number or formula.
+        angle1: Start angle in degrees (0 = along +x, counterclockwise), as
+            a plain number or formula.
+        angle2: End angle, same convention -- the arc sweeps from angle1 to
+            angle2 in the direction of increasing angle.
+
+    Returns:
+        A confirmation message including the new arc's id.
+    """
+    try:
+        new_id = xml_geometry.add_arc(path, draft_block_name, center_point, radius, angle1, angle2)
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added arc (id {new_id}) centered on {center_point!r}, radius {radius}.")
+
+
+@mcp.tool(structured_output=False)
+def list_pieces(path: str, draft_block_name: str) -> list[TextContent]:
+    """List the pieces (seam-allowance outlines) in one draft block.
+
+    Args:
+        path: Path to the .sm2d file.
+        draft_block_name: Draft block to list pieces from.
+
+    Returns:
+        JSON list of each piece's raw attributes (id, name, seamAllowance,
+        width, ...) plus its outline as a list of {type, idObject, reverse}
+        node dicts, in outline order.
+    """
+    try:
+        return _text(xml_geometry.list_pieces(path, draft_block_name))
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+
+
+@mcp.tool(structured_output=False)
+def add_piece(
+    path: str,
+    draft_block_name: str,
+    name: str,
+    outline: list[dict[str, Any]],
+    seam_allowance: bool = True,
+    seam_allowance_width: str = "1",
+) -> list[TextContent]:
+    """Create a piece (seam-allowance outline) from existing draft geometry.
+
+    An outline is an ordered, closed sequence of nodes around the piece
+    boundary: consecutive point nodes imply a straight edge between them,
+    and a curve node (spline/arc) replaces the straight edge with that
+    curve instead. Needed before render_pattern can export anything from a
+    from-scratch draft -- it refuses to export an empty scene.
+
+    Args:
+        path: Path to the .sm2d file.
+        draft_block_name: Draft block to add the piece to.
+        name: Piece name (e.g. "Front Panel") -- unlike point names, this
+            has no character restrictions.
+        outline: Ordered list of nodes around the piece boundary, each a
+            dict with exactly one of:
+              - {"point": ref} -- an existing point (name or id, see list_points).
+              - {"spline": ref, "reverse": bool} -- an existing curve (id,
+                as returned by add_spline), optionally walked tail-to-head.
+              - {"arc": ref, "reverse": bool} -- an existing arc (id, as
+                returned by add_arc), optionally walked end-to-start.
+            "reverse" defaults to false and is ignored for point nodes. Must
+            have at least 2 entries.
+        seam_allowance: Whether the piece has a seam allowance.
+        seam_allowance_width: Seam allowance width, as a plain number or
+            formula, in the pattern's own unit. Only meaningful if
+            seam_allowance is true.
+
+    Returns:
+        A confirmation message including the new piece's id.
+    """
+    try:
+        new_id = xml_geometry.add_piece(
+            path, draft_block_name, name, outline,
+            seam_allowance=seam_allowance, seam_allowance_width=seam_allowance_width,
+        )
+    except xml_geometry.PatternFileError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added piece {name!r} (id {new_id}) with {len(outline)} outline nodes.")
+
+
 def _ribben_connection(host: str | None, port: int | None, token: str | None) -> ribben_client.RibbenConnection:
     return ribben_client.resolve_connection(
         host=host or state.ribben_host,
@@ -756,6 +897,133 @@ def live_add_line(
     except ribben_client.RibbenClientError as e:
         return _text(f"Error: {e}")
     return _text(f"Added line (id {result.get('id')}) from {first_point!r} to {second_point!r}, live.")
+
+
+@mcp.tool(structured_output=False)
+def live_add_spline(
+    draft_block_name: str, first_point: str, second_point: str,
+    angle1: str = "0", length1: str = "1", angle2: str = "0", length2: str = "1",
+    host: str | None = None, port: int | None = None, token: str | None = None,
+) -> list[TextContent]:
+    """Draw a cubic-Bezier curve between two existing points, live.
+
+    Live counterpart to add_spline -- appears in the open window immediately.
+    See live_add_point_single for what "live" means here.
+
+    Args:
+        draft_block_name: Draft block to add the curve to.
+        first_point: Name or id of the point the curve starts at.
+        second_point: Name or id of the point the curve ends at.
+        angle1: Tangent direction at first_point, in degrees.
+        length1: Tangent handle length at first_point.
+        angle2: Tangent direction at second_point.
+        length2: Tangent handle length at second_point.
+        host: Override the addon's host (default: auto-detect).
+        port: Override the addon's port (default: auto-detect).
+        token: Override the addon's auth token (default: auto-detect).
+
+    Returns:
+        A confirmation message including the new curve's id.
+    """
+    try:
+        conn = _ribben_connection(host, port, token)
+        result = ribben_client.add_spline(
+            conn, draft_block_name, first_point, second_point, angle1, length1, angle2, length2
+        )
+    except ribben_client.RibbenClientError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added curve (id {result.get('id')}) from {first_point!r} to {second_point!r}, live.")
+
+
+@mcp.tool(structured_output=False)
+def live_add_arc(
+    draft_block_name: str, center_point: str, radius: str, angle1: str, angle2: str,
+    host: str | None = None, port: int | None = None, token: str | None = None,
+) -> list[TextContent]:
+    """Draw a circular arc around an existing center point, live.
+
+    Live counterpart to add_arc -- appears in the open window immediately.
+    See live_add_point_single for what "live" means here.
+
+    Args:
+        draft_block_name: Draft block to add the arc to.
+        center_point: Name or id of the existing point to center the arc on.
+        radius: Arc radius, as a plain number or formula.
+        angle1: Start angle in degrees.
+        angle2: End angle -- the arc sweeps from angle1 to angle2.
+        host: Override the addon's host (default: auto-detect).
+        port: Override the addon's port (default: auto-detect).
+        token: Override the addon's auth token (default: auto-detect).
+
+    Returns:
+        A confirmation message including the new arc's id.
+    """
+    try:
+        conn = _ribben_connection(host, port, token)
+        result = ribben_client.add_arc(conn, draft_block_name, center_point, radius, angle1, angle2)
+    except ribben_client.RibbenClientError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added arc (id {result.get('id')}) centered on {center_point!r}, radius {radius}, live.")
+
+
+@mcp.tool(structured_output=False)
+def live_list_pieces(
+    draft_block_name: str, host: str | None = None, port: int | None = None, token: str | None = None,
+) -> list[TextContent]:
+    """List the pieces (seam-allowance outlines) in one draft block, live.
+
+    Args:
+        draft_block_name: Draft block to list pieces from.
+        host: Override the addon's host (default: auto-detect).
+        port: Override the addon's port (default: auto-detect).
+        token: Override the addon's auth token (default: auto-detect).
+
+    Returns:
+        JSON list of each piece's raw attributes plus its outline, same
+        shape as the file-based list_pieces tool.
+    """
+    try:
+        conn = _ribben_connection(host, port, token)
+        return _text(ribben_client.list_pieces(conn, draft_block_name))
+    except ribben_client.RibbenClientError as e:
+        return _text(f"Error: {e}")
+
+
+@mcp.tool(structured_output=False)
+def live_add_piece(
+    draft_block_name: str, name: str, outline: list[dict[str, Any]],
+    seam_allowance: bool = True, seam_allowance_width: str = "1",
+    host: str | None = None, port: int | None = None, token: str | None = None,
+) -> list[TextContent]:
+    """Create a piece (seam-allowance outline) from existing draft geometry, live.
+
+    Live counterpart to add_piece -- appears in the open window immediately.
+    See add_piece for the full outline contract (point/spline/arc node
+    dicts) and live_add_point_single for what "live" means here.
+
+    Args:
+        draft_block_name: Draft block to add the piece to.
+        name: Piece name.
+        outline: Ordered list of {"point"|"spline"|"arc": ref, "reverse": bool}
+            node dicts around the piece boundary. Must have at least 2 entries.
+        seam_allowance: Whether the piece has a seam allowance.
+        seam_allowance_width: Seam allowance width, as a plain number or formula.
+        host: Override the addon's host (default: auto-detect).
+        port: Override the addon's port (default: auto-detect).
+        token: Override the addon's auth token (default: auto-detect).
+
+    Returns:
+        A confirmation message including the new piece's id.
+    """
+    try:
+        conn = _ribben_connection(host, port, token)
+        result = ribben_client.add_piece(
+            conn, draft_block_name, name, outline,
+            seam_allowance=seam_allowance, seam_allowance_width=seam_allowance_width,
+        )
+    except ribben_client.RibbenClientError as e:
+        return _text(f"Error: {e}")
+    return _text(f"Added piece {name!r} (id {result.get('id')}) with {len(outline)} outline nodes, live.")
 
 
 @mcp.tool(structured_output=False)

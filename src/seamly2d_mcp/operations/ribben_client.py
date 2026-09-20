@@ -229,3 +229,56 @@ def add_line(
          "line_type": line_type},
         conn,
     )
+
+
+def add_spline(
+    conn: RibbenConnection,
+    draft_block_name: str,
+    first_point: str,
+    second_point: str,
+    angle1: str = "0",
+    length1: str = "1",
+    angle2: str = "0",
+    length2: str = "1",
+) -> dict[str, Any]:
+    return _call(
+        "add_spline",
+        {
+            "draft_block_name": draft_block_name, "first_point": first_point, "second_point": second_point,
+            "angle1": angle1, "length1": length1, "angle2": angle2, "length2": length2,
+        },
+        conn,
+    )
+
+
+def add_arc(
+    conn: RibbenConnection, draft_block_name: str, center_point: str, radius: str, angle1: str, angle2: str
+) -> dict[str, Any]:
+    return _call(
+        "add_arc",
+        {"draft_block_name": draft_block_name, "center_point": center_point, "radius": radius,
+         "angle1": angle1, "angle2": angle2},
+        conn,
+    )
+
+
+def list_pieces(conn: RibbenConnection, draft_block_name: str) -> list[dict[str, Any]]:
+    return _call("list_pieces", {"draft_block_name": draft_block_name}, conn).get("pieces", [])
+
+
+def add_piece(
+    conn: RibbenConnection,
+    draft_block_name: str,
+    name: str,
+    outline: list[dict[str, Any]],
+    seam_allowance: bool = True,
+    seam_allowance_width: str = "1",
+) -> dict[str, Any]:
+    return _call(
+        "add_piece",
+        {
+            "draft_block_name": draft_block_name, "name": name, "outline": outline,
+            "seam_allowance": seam_allowance, "seam_allowance_width": seam_allowance_width,
+        },
+        conn,
+    )

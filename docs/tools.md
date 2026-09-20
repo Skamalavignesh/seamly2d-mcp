@@ -71,21 +71,20 @@ Replace a pattern's `<notes>` text. Backs up to `<path>.bak` first.
 ## Drafting geometry from scratch
 
 A newer, separate capability from the metadata/increment tools above: these
-create and extend actual draft geometry (points and lines) in a `.sm2d`
-file, so a pattern can be drafted from nothing rather than only having its
-existing increments tweaked. Covers the handful of point types most drafts
-are built from -- not the full ~40 types Seamly2D's toolbox has (see
-`src/libs/vtools/tools/` in the Seamly2D source for the rest). Every write
-backs up to `<path>.bak` first, same as the tools above.
+create and extend actual draft geometry (points, lines, curves, and arcs) in
+a `.sm2d` file, so a pattern can be drafted from nothing rather than only
+having its existing increments tweaked. Covers the handful of point/curve
+types most drafts are built from -- not the full ~40 types Seamly2D's
+toolbox has (see `src/libs/vtools/tools/` in the Seamly2D source for the
+rest). Every write backs up to `<path>.bak` first, same as the tools above.
 
 Typical flow: `create_pattern` → `add_point_single` (at least once, as a
 starting anchor) → a chain of `add_point_end_line`/`add_point_along_line`/
-`add_line` → `validate_pattern` to catch a bad reference or formula early
-(this loads the file in Seamly2D's own silent test mode, so it's checked
-against the real app, not just against this server's idea of the schema).
-Point/piece *outlines* (the later "Piece mode" step in Seamly2D's own
-workflow) aren't covered yet -- `render_pattern` won't export anything
-useful until pieces exist.
+`add_line`/`add_spline`/`add_arc` → `add_piece` (needed before
+`render_pattern` will export anything -- it refuses an empty scene) →
+`validate_pattern` to catch a bad reference or formula early (this loads
+the file in Seamly2D's own silent test mode, so it's checked against the
+real app, not just against this server's idea of the schema).
 
 ### `create_pattern`
 ```json
@@ -130,6 +129,54 @@ A point at a given length along the line from `first_point` toward
 ```
 A plain visual line connecting two existing points.
 
+### `add_spline`
+```json
+{"path": "C:/patterns/new_shirt.sm2d", "draft_block_name": "Front",
+ "first_point": "A1", "second_point": "A2",
+ "angle1": "45", "length1": "3", "angle2": "135", "length2": "3"}
+```
+A cubic-Bezier curve between two existing points (Seamly2D's "Curve" tool).
+Each end has its own tangent control handle, expressed the same
+angle+length way `add_point_end_line` expresses a new point, rather than as
+raw control-point coordinates -- `angle1`/`length1` control the tangent at
+`first_point`, `angle2`/`length2` at `second_point`.
+
+### `add_arc`
+```json
+{"path": "C:/patterns/new_shirt.sm2d", "draft_block_name": "Front",
+ "center_point": "A1", "radius": "5", "angle1": "0", "angle2": "180"}
+```
+A circular arc around an existing center point (Seamly2D's "Arc" tool),
+sweeping from `angle1` to `angle2` in degrees (0 = along +x,
+counterclockwise).
+
+### `list_pieces`
+Pieces in one draft block, with their raw attributes (id, name,
+seamAllowance, width, ...) and their outline as a list of `{type, idObject,
+reverse}` node dicts, in outline order.
+
+### `add_piece`
+```json
+{"path": "C:/patterns/new_shirt.sm2d", "draft_block_name": "Front",
+ "name": "Front Panel",
+ "outline": [
+   {"point": "A"}, {"point": "B"},
+   {"spline": "5", "reverse": false},
+   {"point": "D"}
+ ]}
+```
+Builds a seam-allowance outline (Seamly2D's "New Piece" tool) from existing
+points/curves. `outline` is an ordered, closed sequence of nodes around the
+piece boundary -- consecutive point nodes imply a straight edge; a
+`{"spline": ...}`/`{"arc": ...}` node replaces the straight edge with that
+curve instead (reference the id `add_spline`/`add_arc` returned; `reverse`
+walks it tail-to-head). Internally, Seamly2D can't have a piece reference
+`<calculation>` geometry directly -- each referenced point/curve first gets
+a thin wrapper in the draft block's `<modeling>` section, which this tool
+creates automatically, so callers just reference the same names/ids used
+with `add_point_*`/`add_spline`/`add_arc`. At least one piece is required
+before `render_pattern` can export a from-scratch draft.
+
 ## Live (Ribben addon)
 
 These require a running Seamly2D built from the `E:\seamly2d-ribben` fork
@@ -166,19 +213,21 @@ the pattern.
 ### `live_set_pattern_notes`
 Live equivalent of `set_pattern_notes`.
 
-### `live_list_points` / `live_add_point_single` / `live_add_point_end_line` / `live_add_point_along_line` / `live_add_line`
+### `live_list_points` / `live_add_point_single` / `live_add_point_end_line` / `live_add_point_along_line` / `live_add_line` / `live_add_spline` / `live_add_arc` / `live_list_pieces` / `live_add_piece`
 Live equivalents of the [drafting geometry](#drafting-geometry-from-scratch)
-tools above, with the same arguments -- but the new point/line **appears in
-the open Seamly2D window immediately**, the same way an Undo/Redo does,
-instead of only showing up after the file is reopened. This is the one
-capability the file-based tools genuinely can't match: watch a pattern get
-drafted live while it happens, prompt by prompt.
+tools above, with the same arguments -- but the new point/line/curve/piece
+**appears in the open Seamly2D window immediately**, the same way an
+Undo/Redo does, instead of only showing up after the file is reopened.
+This is the one capability the file-based tools genuinely can't match:
+watch a pattern get drafted live while it happens, prompt by prompt.
 ```json
 {"draft_block_name": "Front", "name": "A2", "base_point": "A1", "length": "20", "angle": "0"}
 ```
-An invalid length/angle formula doesn't leave the pattern half-broken: the
-failed point is rolled back and the document re-parsed again before the
-error is returned.
+An invalid length/angle formula, or a piece outline with a bad reference,
+doesn't leave the pattern half-broken: the failed insert (or, for
+`live_add_piece`, every element it inserted -- each promoted `<modeling>`
+wrapper plus the piece itself) is rolled back and the document re-parsed
+again before the error is returned.
 
 ## Render / validate
 
